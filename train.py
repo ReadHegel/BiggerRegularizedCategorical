@@ -1,6 +1,6 @@
 import os
 
-os.environ['MUJOCO_GL'] = 'egl'
+os.environ['MUJOCO_GL'] = 'osmesa' #'egl'
 
 from absl import app, flags
 
@@ -28,12 +28,15 @@ flags.DEFINE_integer('updates_per_step', 2, 'Number of updates per step.')
 flags.DEFINE_integer('width_critic', 4096, 'Width of the critic network.')
         
 def main(_):
+    from dotenv import load_dotenv
+    load_dotenv()
+
     if FLAGS.log_to_wandb:
         import wandb
         wandb.init(
             config=FLAGS,
-            entity='',
-            project='',
+            entity=os.getenv('WANDB_ENTITY'),
+            project=os.getenv('WANDB_PROJECT'),
             group=f'{FLAGS.env_names}',
             name=f'{FLAGS.seed}'
         )

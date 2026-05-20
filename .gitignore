@@ -1,0 +1,6 @@
+.env
+.venv
+logs/
+wandb/
+
+**/__pycache__/

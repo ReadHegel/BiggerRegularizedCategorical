@@ -1,0 +1,1 @@
+JOB_ID=$(sacct -XPno jobid | tail -1); tail --follow logs/slurm-"$JOB_ID"-*

@@ -1,0 +1,1 @@
+NETWORKS = ['bro', 'simbaV2']

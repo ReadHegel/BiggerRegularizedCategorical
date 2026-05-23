@@ -6,14 +6,14 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from jaxrl.agent.update import build_actor_input, update_actor, update_critic, update_target_critic, update_temperature
-
-from jaxrl.networks import NormalTanhPolicy, Critic, Temperature
+from jaxrl.agent.networks.common import build_actor_critic, build_actor_input, Temperature
+from jaxrl.agent.update import update_actor, update_critic, update_target_critic, update_temperature
+from jaxrl.agent.networks.SimbaV2.utils import l2normalize_network
 from jaxrl.utils import Model, PRNGKey, Batch
 
 
-@functools.partial(jax.jit, static_argnames=('discount', 'target_entropy', 'num_bins', 'v_max', 'multitask'),)
-@functools.partial(jax.vmap, in_axes=(None, None, None, None, None, 0, None, None, None, None, None))
+@functools.partial(jax.jit, static_argnames=('discount', 'target_entropy', 'num_bins', 'v_max', 'multitask', 'use_l2_weight_norm'),)
+@functools.partial(jax.vmap, in_axes=(None, None, None, None, None, 0, None, None, None, None, None, None))
 def _get_infos(
     rng: PRNGKey, 
     actor: Model, 
@@ -25,11 +25,12 @@ def _get_infos(
     target_entropy: float, 
     num_bins: int, 
     v_max: float,
-    multitask: bool
+    multitask: bool,
+    use_l2_weight_norm: bool,
 ):
     rng, actor_key, critic_key = jax.random.split(rng, 3)
-    _, critic_info = update_critic(critic_key, actor, critic, target_critic, temp, batch, discount, num_bins, v_max, multitask)
-    _, actor_info = update_actor(actor_key, actor, critic, temp, batch, num_bins, v_max, multitask) 
+    _, critic_info = update_critic(critic_key, actor, critic, target_critic, temp, batch, discount, num_bins, v_max, multitask, use_l2_weight_norm)
+    _, actor_info = update_actor(actor_key, actor, critic, temp, batch, num_bins, v_max, multitask, use_l2_weight_norm) 
     _, alpha_info = update_temperature(temp, actor_info['entropy'], target_entropy)
     return {
         **critic_info,
@@ -66,12 +67,13 @@ def _update(
     target_entropy: float, 
     num_bins: int, 
     v_max: float,
-    multitask: bool
+    multitask: bool,
+    use_l2_weight_norm: bool,
 ):
     rng, actor_key, critic_key = jax.random.split(rng, 3)
-    new_critic, critic_info = update_critic(critic_key, actor, critic, target_critic, temp, batch, discount, num_bins, v_max, multitask)
+    new_critic, critic_info = update_critic(critic_key, actor, critic, target_critic, temp, batch, discount, num_bins, v_max, multitask, use_l2_weight_norm)
     new_target_critic = update_target_critic(new_critic, target_critic, tau)
-    new_actor, actor_info = update_actor(actor_key, actor, new_critic, temp, batch, num_bins, v_max, multitask) 
+    new_actor, actor_info = update_actor(actor_key, actor, new_critic, temp, batch, num_bins, v_max, multitask, use_l2_weight_norm) 
     new_temp, alpha_info = update_temperature(temp, actor_info['entropy'], target_entropy)
     return rng, new_actor, new_critic, new_target_critic, new_temp, {
         **critic_info,
@@ -79,7 +81,7 @@ def _update(
         **alpha_info,
     }
 
-@functools.partial(jax.jit, static_argnames=('discount', 'tau', 'target_entropy', 'num_bins', 'v_max', 'multitask', 'num_updates'))
+@functools.partial(jax.jit, static_argnames=('discount', 'tau', 'target_entropy', 'num_bins', 'v_max', 'multitask', 'use_l2_weight_norm', 'num_updates'))
 def _do_multiple_updates(
     rng: PRNGKey,
     actor: Model,
@@ -92,7 +94,8 @@ def _do_multiple_updates(
     target_entropy: float,
     num_bins: int,
     v_max: float,
-    multitask: bool, 
+    multitask: bool,
+    use_l2_weight_norm: bool,
     step: int,    
     num_updates: int
 ):
@@ -111,7 +114,8 @@ def _do_multiple_updates(
             target_entropy,
             num_bins,
             v_max,
-            multitask
+            multitask,
+            use_l2_weight_norm,
         )
         return step, new_rng, new_actor, new_critic, new_target_critic, new_temp, info
 
@@ -125,6 +129,9 @@ class BRC(object):
         observations: jnp.ndarray,
         actions: jnp.ndarray,
         num_tasks: int,
+        arch: str = "bro",
+        actor_overrides: dict | None = None,
+        critic_overrides: dict | None = None,
         embedding_size: int = 32,
         ensemble_size: int = 2,
         actor_lr: float = 3e-4,
@@ -135,10 +142,9 @@ class BRC(object):
         target_entropy: Optional[float] = None,
         init_temperature: float = 0.1,
         updates_per_step: int = 10,
-        width_critic: int = 512,
-        width_actor: int = 256,
         num_bins: int = 101,
         v_max: float = 10.0,
+        use_l2_weight_norm: bool = False,
     ) -> None:
         
         action_dim = actions.shape[-1]
@@ -149,6 +155,7 @@ class BRC(object):
         self.discount = discount
         self.num_bins = num_bins
         self.v_max = v_max
+        self.use_l2_weight_norm = use_l2_weight_norm
         
         self.num_tasks = num_tasks
         self.embedding_size = embedding_size
@@ -163,15 +170,34 @@ class BRC(object):
         def _init_models(seed):
             rng = jax.random.PRNGKey(seed)
             rng, actor_key, critic_key, temp_key = jax.random.split(rng, 4)
-            actor_def = NormalTanhPolicy(action_dim=action_dim, hidden_dims=width_actor)
-            critic_def = Critic(num_tasks=num_tasks, embedding_size=embedding_size, ensemble_size=ensemble_size, hidden_dims=width_critic, depth=2, output_nodes=num_bins, multitask=self.multitask)
+
+            actor_def, critic_def = build_actor_critic(
+                arch,
+                action_dim=action_dim,
+                num_tasks=num_tasks,
+                embedding_size=embedding_size,
+                ensemble_size=ensemble_size,
+                num_bins=num_bins,
+                multitask=self.multitask,
+                actor_overrides=actor_overrides,
+                critic_overrides=critic_overrides,
+            )
+
+            # actor_def = NormalTanhPolicy(action_dim=action_dim, hidden_dims=width_actor)
+            # critic_def = Critic(num_tasks=num_tasks, embedding_size=embedding_size, ensemble_size=ensemble_size, hidden_dims=width_critic, depth=2, output_nodes=num_bins, multitask=self.multitask)
             actor = Model.create(actor_def, inputs=[actor_key, actor_init], tx=optax.adamw(learning_rate=actor_lr))
             critic = Model.create(critic_def, inputs=[critic_key, observations, actions, task_ids_init], tx=optax.adamw(learning_rate=critic_lr))
             target_critic = Model.create(critic_def, inputs=[critic_key, observations, actions, task_ids_init])
             temp = Model.create(Temperature(init_temperature), inputs=[temp_key], tx=optax.adam(learning_rate=temp_lr, b1=0.5))
+
+            if use_l2_weight_norm:
+                actor = l2normalize_network(actor)
+                critic = l2normalize_network(critic)
+                target_critic = l2normalize_network(target_critic)
+            
             return actor, critic, target_critic, temp, rng
 
-        self.init_models = jax.jit(_init_models)
+        self.init_models = _init_models #jax.jit(_init_models)
         self.actor, self.critic, self.target_critic, self.temp, self.rng = self.init_models(self.seed)
         self.step = 1
 
@@ -197,6 +223,7 @@ class BRC(object):
             self.num_bins,
             self.v_max,
             self.multitask,
+            self.use_l2_weight_norm,
             self.step,
             num_updates
         )
@@ -220,7 +247,8 @@ class BRC(object):
                     self.target_entropy,
                     self.num_bins,
                     self.v_max,
-                    self.multitask)
+                    self.multitask,
+                    self.use_l2_weight_norm)
         return infos
     
     def get_temperature(self):

@@ -1,15 +1,12 @@
 import math
 
+import distrax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
 from tensorflow_probability.substrates import jax as tfp
 
 from jaxrl.agent.networks.SimbaV2.utils import l2normalize
-
-tfd = tfp.distributions
-tfb = tfp.bijectors
-
 
 class Scaler(nn.Module):
     dim: int
@@ -144,7 +141,7 @@ class HyperNormalTanhPolicy(nn.Module):
         self,
         x: jnp.ndarray,
         temperature: float = 1.0,
-    ) -> tfd.Distribution:
+    ) -> distrax.Distribution:
         mean = self.mean_w1(x)
         mean = self.mean_scaler(mean)
         mean = self.mean_w2(mean) + self.mean_bias

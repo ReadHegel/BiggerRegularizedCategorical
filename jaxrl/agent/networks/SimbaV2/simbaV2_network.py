@@ -154,14 +154,14 @@ class SimbaV2QValue(nn.Module):
 class SimbaV2Critic(BaseEnsembleMultitaskCritic):
     q_module = SimbaV2QValue
 
-    num_blocks: int
-    hidden_dim: int
-    scaler_init: float
-    scaler_scale: float
-    alpha_init: float
-    alpha_scale: float
-    c_shift: float
-    num_bins: int
+    num_blocks: int = 4
+    hidden_dim: int = 512
+    scaler_init: float = 1.0
+    scaler_scale: float = 1.0
+    alpha_init: float = 0.3
+    alpha_scale: float = 1.0
+    c_shift: float = 3.0
+    num_bins: int = 101
 
     def q_member_kwargs(self) -> dict:
         return {

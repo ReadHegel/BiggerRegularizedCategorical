@@ -60,6 +60,9 @@ class BaseActor(nn.Module):
             "Zaimplementuj __call__ jak NormalTanhPolicy: backbone -> distrax + Tanh."
         )
 
+    def post_update(self, model: Model) -> Model:
+        return model
+
 
 class BaseEnsembleMultitaskCritic(nn.Module):
     num_tasks: int
@@ -101,6 +104,9 @@ class BaseEnsembleMultitaskCritic(nn.Module):
             inputs = jnp.concatenate((observations, actions, task_embedding), axis=-1)            
         q_values = self.q_value_ensemble(inputs)
         return q_values
+
+    def post_update(self, model: Model) -> Model:
+        return model
 
 def build_actor_critic(
     arch: str,

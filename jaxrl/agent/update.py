@@ -8,9 +8,7 @@ from typing import Tuple
 from jaxrl.agent.networks.common import build_actor_input
 from jaxrl.utils import Batch, Model, Params, PRNGKey, tree_norm
 
-from jaxrl.agent.networks.SimbaV2.utils import l2normalize_network
-
-def update_actor(key: PRNGKey, actor: Model, critic: Model, temp: Model, batch: Batch, num_bins: int, v_max: float, multitask: bool, use_l2_weight_norm: bool = False):
+def update_actor(key: PRNGKey, actor: Model, critic: Model, temp: Model, batch: Batch, num_bins: int, v_max: float, multitask: bool):
     inputs = build_actor_input(critic, batch.observations, batch.task_ids, multitask)
     def actor_loss_fn(actor_params: Params):
         dist = actor.apply({'params': actor_params}, inputs)        
@@ -26,9 +24,7 @@ def update_actor(key: PRNGKey, actor: Model, critic: Model, temp: Model, batch: 
             'actor_pnorm': tree_norm(actor_params),
         }
     new_actor, info = actor.apply_gradient(actor_loss_fn)
-
-    if use_l2_weight_norm:
-        new_actor = l2normalize_network(new_actor)
+    new_actor = new_actor.post_update()
 
     info['actor_gnorm'] = info.pop('grad_norm')
     return new_actor, info
@@ -65,7 +61,7 @@ def categorical_td_loss(
     return target_probs, q_value_target
 
 def update_critic(key: PRNGKey, actor: Model, critic: Model, target_critic: Model,
-           temp: Model, batch: Batch, discount: float, num_bins: int, v_max: float, multitask: bool, use_l2_weight_norm: bool = False):
+           temp: Model, batch: Batch, discount: float, num_bins: int, v_max: float, multitask: bool):
     inputs = build_actor_input(critic, batch.next_observations, batch.task_ids, multitask)
     dist = actor(inputs)
     next_actions, next_log_probs = dist.sample_and_log_prob(seed=key)
@@ -87,9 +83,7 @@ def update_critic(key: PRNGKey, actor: Model, critic: Model, target_critic: Mode
         }
         
     new_critic, info = critic.apply_gradient(critic_loss_fn)
-
-    if use_l2_weight_norm:
-        new_critic = l2normalize_network(new_critic)
+    new_critic = new_critic.post_update()
 
     info["critic_gnorm"] = info.pop("grad_norm")
     return new_critic, info

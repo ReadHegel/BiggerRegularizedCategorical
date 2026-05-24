@@ -10,6 +10,8 @@ from jaxrl.agent.networks.SimbaV2.simbaV2_layer import (
 )
 
 from jaxrl.agent.networks.common import BaseActor, BaseEnsembleMultitaskCritic
+from jaxrl.agent.networks.SimbaV2.utils import l2normalize_network
+from jaxrl.utils import Model
 
 SIMBA_ACTOR_CONFIG = {
     "num_blocks": 2,
@@ -104,6 +106,9 @@ class SimbaV2Actor(BaseActor):
 
         return dist
 
+    def post_update(self, model: Model) -> Model:
+        return l2normalize_network(model)
+
 
 class SimbaV2QValue(nn.Module):
     num_blocks: int
@@ -174,3 +179,6 @@ class SimbaV2Critic(BaseEnsembleMultitaskCritic):
             "c_shift": self.c_shift,
             "num_bins": self.num_bins,
         }
+
+    def post_update(self, model: Model) -> Model:
+        return l2normalize_network(model)

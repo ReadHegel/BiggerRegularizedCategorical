@@ -70,6 +70,9 @@ class Model:
         return self.replace(step=self.step + 1,
                             params=new_params,
                             opt_state=new_opt_state), info
+
+    def post_update(self):
+        return self.apply_fn.post_update(self)
     
     def get_gradient(self, loss_fn):
         grad_fn = jax.grad(loss_fn, has_aux=True)

@@ -70,12 +70,11 @@ def main(_):
     # Kwargs setup
     kwargs = {}
     kwargs['updates_per_step'] = FLAGS.updates_per_step
-    kwargs['use_l2_weight_norm'] = FLAGS.arch == 'simbaV2'
     # kwargs['width_critic'] = FLAGS.width_critic
     
     num_tasks = len(env.envs)
 
-    _log(f"[train] initializing BRC num_tasks={num_tasks} use_l2={kwargs['use_l2_weight_norm']}")
+    _log(f"[train] initializing BRC num_tasks={num_tasks} arch={FLAGS.arch}")
     agent = BRC(
         FLAGS.seed,
         env.observation_space.sample()[:1],

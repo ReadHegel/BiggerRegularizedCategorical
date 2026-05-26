@@ -74,7 +74,9 @@ def update_critic(key: PRNGKey, actor: Model, critic: Model, target_critic: Mode
         next_actions,
         batch.task_ids,
         mutable="batch_stats",
-        training=True,
+        training=True, # I am not sure if True is correct here, but it how it is done in the original code, also 
+                        # the running batch stats are not updated at all for target critic, so trainging=False would be wrong
+                    
     )    
 
     target_probs, q_value_target = categorical_td_loss(next_log_probs, next_q_logits, batch, discount, num_bins, v_max, temp)

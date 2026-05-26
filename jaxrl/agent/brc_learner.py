@@ -12,7 +12,7 @@ from jaxrl.utils import Model, PRNGKey, Batch
 
 
 @functools.partial(jax.jit, static_argnames=('discount', 'target_entropy', 'num_bins', 'v_max', 'multitask'),)
-@functools.partial(jax.vmap, in_axes=(None, None, None, None, None, 0, None, None, None, None, None, None))
+@functools.partial(jax.vmap, in_axes=(None, None, None, None, None, 0, None, None, None, None, None))
 def _get_infos(
     rng: PRNGKey, 
     actor: Model, 

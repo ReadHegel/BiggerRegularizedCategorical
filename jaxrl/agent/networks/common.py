@@ -80,8 +80,8 @@ class BaseEnsembleMultitaskCritic(nn.Module):
             self.task_embedding = TaskEmbedding(self.num_tasks, self.embedding_size)
         VmapCritic = nn.vmap(
             self.q_module,
-            variable_axes={'params': 0},
-            split_rngs={'params': True},
+            variable_axes={'params': 0, "batch_stats": 0},
+            split_rngs={'params': True, "batch_stats": True},
             in_axes=None,
             out_axes=0,
             axis_size=self.ensemble_size,
@@ -93,6 +93,7 @@ class BaseEnsembleMultitaskCritic(nn.Module):
         observations: Optional[jnp.ndarray],
         actions: Optional[jnp.ndarray],
         task_ids: jnp.ndarray,
+        training: bool = False,
         return_embeddings: bool = False,
     ) -> jnp.ndarray:
         if self.multitask is False:
@@ -102,7 +103,7 @@ class BaseEnsembleMultitaskCritic(nn.Module):
             if return_embeddings:
                 return task_embedding
             inputs = jnp.concatenate((observations, actions, task_embedding), axis=-1)            
-        q_values = self.q_value_ensemble(inputs)
+        q_values = self.q_value_ensemble(inputs, training)
         return q_values
 
     def post_update(self, model: Model) -> Model:
@@ -148,5 +149,16 @@ def build_actor_critic(
             **critic_overrides,
         )
         return actor, critic
-
+    elif arch == "xqc":
+        from jaxrl.agent.networks.XQC.networks import make_xqc_actor, make_xqc_critic
+        actor = make_xqc_actor(action_dim, **actor_overrides)
+        critic = make_xqc_critic(
+            num_tasks=num_tasks,
+            embedding_size=embedding_size,
+            ensemble_size=ensemble_size,
+            num_bins=num_bins,
+            multitask=multitask,
+            **critic_overrides,
+        )
+        return actor, critic
     raise ValueError(f"Unsupported architecture: {arch!r}")

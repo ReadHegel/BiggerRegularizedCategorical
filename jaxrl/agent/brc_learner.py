@@ -47,8 +47,9 @@ def _sample_actions(
     actor: Model,
     inputs: np.ndarray,
     temperature: float = 1.0,
+    training: bool = False,
 ):
-    dist = actor(inputs, temperature)
+    dist = actor(inputs, temperature, training=False)
     rng, key = jax.random.split(rng)
     actions = dist.sample(seed=key)
     return rng, actions

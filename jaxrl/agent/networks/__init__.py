@@ -1,1 +1,1 @@
-NETWORKS = ['bro', 'simbaV2']
+NETWORKS = ['bro', 'simbaV2', 'xqc']

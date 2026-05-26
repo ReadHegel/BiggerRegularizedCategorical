@@ -27,7 +27,7 @@ flags.DEFINE_boolean('offline_evaluation', True, 'Whether to perform evaluations
 flags.DEFINE_boolean('render', True, 'Whether to log the rendering to wandb.')
 flags.DEFINE_integer('updates_per_step', 2, 'Number of updates per step.')
 # flags.DEFINE_integer('width_critic', 4096, 'Width of the critic network.') moved to BRO_CRITIC_CONFIG
-flags.DEFINE_string('arch', 'bro', 'Architecture to use.')
+flags.DEFINE_string('arch', 'bro', 'Architecture to use.') # ['bro', 'simbaV2', 'xqc']
 flags.DEFINE_integer('log_interval', 1000, 'Print progress every N env steps (use 1 for smoke).')
 
 

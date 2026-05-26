@@ -10,10 +10,10 @@ from jaxrl.utils import Batch, Model, Params, PRNGKey, tree_norm
 
 def update_actor(key: PRNGKey, actor: Model, critic: Model, temp: Model, batch: Batch, num_bins: int, v_max: float, multitask: bool):
     inputs = build_actor_input(critic, batch.observations, batch.task_ids, multitask)
-    def actor_loss_fn(actor_params: Params):
-        dist = actor.apply({'params': actor_params}, inputs)        
+    def actor_loss_fn(actor_params: Params, batch_stats: Params = None):
+        dist, actor_state_updates = actor.apply(actor_params, batch_stats, inputs, mutable=["batch_stats"], training=True)        
         actions, log_probs = dist.sample_and_log_prob(seed=key)
-        q_logits = critic(batch.observations, actions, batch.task_ids)        
+        q_logits, _ = critic(batch.observations, actions, batch.task_ids, mutable="batch_stats", training=False)        
         q_probs = jax.nn.softmax(q_logits, axis=-1).mean(axis=0)
         bin_values = jnp.linspace(start=-v_max, stop=v_max, num=num_bins)[None]
         q_values = (bin_values * q_probs).sum(-1)    
@@ -21,12 +21,16 @@ def update_actor(key: PRNGKey, actor: Model, critic: Model, temp: Model, batch: 
         return actor_loss, {
             'actor_loss': actor_loss,
             'entropy': -log_probs.mean(),
+            "actor_batch_stats": actor_state_updates.get("batch_stats"),
             'actor_pnorm': tree_norm(actor_params),
         }
     new_actor, info = actor.apply_gradient(actor_loss_fn)
     new_actor = new_actor.post_update()
 
     info['actor_gnorm'] = info.pop('grad_norm')
+
+    new_actor = new_actor.replace(batch_stats=info.pop("actor_batch_stats"))
+
     return new_actor, info
 
 def categorical_td_loss(
@@ -63,14 +67,28 @@ def categorical_td_loss(
 def update_critic(key: PRNGKey, actor: Model, critic: Model, target_critic: Model,
            temp: Model, batch: Batch, discount: float, num_bins: int, v_max: float, multitask: bool):
     inputs = build_actor_input(critic, batch.next_observations, batch.task_ids, multitask)
-    dist = actor(inputs)
+    dist = actor(inputs, training=False)
     next_actions, next_log_probs = dist.sample_and_log_prob(seed=key)
-    next_q_logits = target_critic(batch.next_observations, next_actions, batch.task_ids)    
+    next_q_logits, _ = target_critic(
+        batch.next_observations,
+        next_actions,
+        batch.task_ids,
+        mutable="batch_stats",
+        training=True,
+    )    
 
     target_probs, q_value_target = categorical_td_loss(next_log_probs, next_q_logits, batch, discount, num_bins, v_max, temp)
 
-    def critic_loss_fn(critic_params: Params):
-        q_logits = critic.apply({"params": critic_params}, batch.observations, batch.actions, batch.task_ids)
+    def critic_loss_fn(critic_params: Params, batch_stats: Params = None):
+        q_logits, critic_state_updates = critic.apply(
+            critic_params,
+            batch_stats,
+            batch.observations,
+            batch.actions,
+            batch.task_ids,
+            mutable="batch_stats",
+            training=True,
+        )
         q_logprobs = jax.nn.log_softmax(q_logits, axis=-1)
         critic_loss = -(target_probs[None] * q_logprobs).sum(-1).mean(-1).sum(-1)
         return critic_loss, {
@@ -80,12 +98,16 @@ def update_critic(key: PRNGKey, actor: Model, critic: Model, target_critic: Mode
             "q_max": q_value_target.max(),
             "r": batch.rewards.mean(),
             "critic_pnorm": tree_norm(critic_params),
+            "critic_batch_stats": critic_state_updates.get("batch_stats"),
         }
         
     new_critic, info = critic.apply_gradient(critic_loss_fn)
     new_critic = new_critic.post_update()
 
     info["critic_gnorm"] = info.pop("grad_norm")
+
+    new_critic = new_critic.replace(batch_stats=info.pop("critic_batch_stats"))
+
     return new_critic, info
 
 def update_target_critic(critic: Model, target_critic: Model, tau: float):
@@ -95,8 +117,8 @@ def update_target_critic(critic: Model, target_critic: Model, tau: float):
     return target_critic.replace(params=new_target_params)
 
 def update_temperature(temp: Model, entropy: float, target_entropy: float):
-    def temperature_loss_fn(temp_params):
-        temperature = temp.apply({'params': temp_params})
+    def temperature_loss_fn(temp_params, batch_stats: Params = None):
+        temperature = temp.apply(temp_params)
         temp_loss = temperature * (entropy - target_entropy).mean()
         return temp_loss, {'temperature': temperature, 'temp_loss': temp_loss}
     new_temp, info = temp.apply_gradient(temperature_loss_fn)

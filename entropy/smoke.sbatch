@@ -17,7 +17,7 @@ source entropy/.env_entropy
 
 uv run train.py \
   --env_names=cheetah-run \
-  --arch=simbaV2 \
+  --arch=xqc \
   --max_steps=50 \
   --start_training=10 \
   --replay_buffer_size=5000 \

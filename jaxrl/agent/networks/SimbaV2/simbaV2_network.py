@@ -98,6 +98,7 @@ class SimbaV2Actor(BaseActor):
         self,
         observations: jnp.ndarray,
         temperature: float = 1.0,
+        training: bool = False, # ignore 
     ) -> distrax.Distribution:
         x = observations
         y = self.embedder(x)
@@ -150,6 +151,7 @@ class SimbaV2QValue(nn.Module):
     def __call__(
         self,
         inputs: jnp.ndarray,
+        training: bool, # ignore 
     ) -> jnp.ndarray:
         y = self.embedder(inputs)
         z = self.encoder(y)

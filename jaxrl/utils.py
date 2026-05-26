@@ -28,8 +28,10 @@ class Model:
     step: int
     apply_fn: flax.linen.Module = flax.struct.field(pytree_node=False)
     params: Params
+    batch_stats: Params
     tx: Optional[optax.GradientTransformation] = flax.struct.field(pytree_node=False)
     opt_state: Optional[optax.OptState] = None
+
 
     @classmethod
     def create(cls,
@@ -49,17 +51,27 @@ class Model:
                    apply_fn=model_def,
                    params=params,
                    tx=tx,
-                   opt_state=opt_state)
+                   opt_state=opt_state,
+                   batch_stats=variables.get('batch_stats', None),
+                )
 
     def __call__(self, *args, **kwargs):
-        return self.apply_fn.apply({'params': self.params}, *args, **kwargs)
+        variables = {"params": self.params}
+        if self.batch_stats is not None:
+            variables["batch_stats"] = self.batch_stats
+        return self.apply_fn.apply(variables, *args, **kwargs)
 
-    def apply(self, *args, **kwargs):
-        return self.apply_fn.apply(*args, **kwargs)
+    def apply(self, params, batch_stats=None, *args, **kwargs):
+        variables = {
+            "params": params,
+        }
+        if batch_stats is not None:
+            variables["batch_stats"] = batch_stats
+        return self.apply_fn.apply(variables, *args, **kwargs)
 
     def apply_gradient(self, loss_fn):
         grad_fn = jax.grad(loss_fn, has_aux=True)
-        grads, info = grad_fn(self.params)
+        grads, info = grad_fn(self.params, self.batch_stats)
         grad_norm = tree_norm(grads)
         info['grad_norm'] = grad_norm
 
@@ -82,12 +94,29 @@ class Model:
     def save(self, save_path: str):
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         with open(save_path, 'wb') as f:
-            f.write(flax.serialization.to_bytes(SaveState(params=self.params, opt_state=self.opt_state)))
+            f.write(
+                flax.serialization.to_bytes(
+                    SaveState(
+                        params=self.params, 
+                        opt_state=self.opt_state, 
+                        batch_stats=self.batch_stats,
+                    )
+                )
+            )
 
     def load(self, load_path: str):
         with open(load_path, 'rb') as f:
             contents = f.read()
             saved_state = flax.serialization.from_bytes(
-                SaveState(params=self.params, opt_state=self.opt_state), contents
+                SaveState(
+                    params=self.params,
+                    opt_state=self.opt_state,
+                    batch_stats=self.batch_stats,
+                ),
+                contents,
             )
-        return self.replace(params=saved_state.params, opt_state=saved_state.opt_state)
+        return self.replace(
+            params=saved_state.params,
+            opt_state=saved_state.opt_state,
+            batch_stats=saved_state.batch_stats,
+        )

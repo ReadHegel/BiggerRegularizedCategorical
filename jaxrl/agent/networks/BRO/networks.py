@@ -99,7 +99,7 @@ class QValue(nn.Module):
             output_nodes=self.output_nodes,
         )
 
-    def __call__(self, inputs: jnp.ndarray):
+    def __call__(self, inputs: jnp.ndarray, training):
         return self.critic(inputs)
 
 
@@ -113,7 +113,7 @@ class NormalTanhPolicy(BaseActor):
     log_std_max: float = 2.0
 
     @nn.compact
-    def __call__(self, observations: jnp.ndarray, temperature: float = 1.0):
+    def __call__(self, observations: jnp.ndarray, temperature: float = 1.0, training: bool = False):
         outputs = BroNet(
             hidden_dims=self.hidden_dims,
             depth=self.depth,

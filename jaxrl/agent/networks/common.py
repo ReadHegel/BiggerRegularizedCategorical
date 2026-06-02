@@ -20,7 +20,7 @@ def build_actor_input(
 ) -> jnp.ndarray:
     inputs = observations
     if multitask:
-        task_embeddings = critic(None, None, task_ids, True)
+        task_embeddings = critic(None, None, task_ids, training=True, return_embeddings=True)
         inputs = jnp.concatenate((inputs, task_embeddings), axis=-1)
     return inputs
 

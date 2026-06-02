@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
 #SBATCH --job-name=brc
-#SBATCH --time=0-02:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --partition=a100
-#SBATCH --mem=10G
+#SBATCH --mem=32G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
@@ -15,4 +15,7 @@ set -eux
 
 source entropy/.env_entropy
 
-uv run train.py --env_names=cartpole-swingup --arch=xqc
+uv run train.py \
+    --env_names=DMC_DOGS \
+    --max_steps=500000 \
+    --arch=xqc \

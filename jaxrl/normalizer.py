@@ -1,5 +1,79 @@
 import numpy as np
+
 from jaxrl.utils import Batch
+
+# RunningMeanStd adapted from SimbaV2 (Apache 2.0):
+# external_repos/SimbaV2/scale_rl/agents/wrappers/utils.py
+
+
+def _update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, batch_count):
+    delta = batch_mean - mean
+    tot_count = count + batch_count
+    ratio = batch_count / tot_count
+    new_mean = mean + delta * ratio
+    m_a = var * count
+    m_b = batch_var * batch_count
+    m2 = m_a + m_b + np.square(delta) * count * ratio
+    new_var = m2 / tot_count
+    return new_mean, new_var, tot_count
+
+
+class RunningMeanStd:
+    """Tracks per-feature mean, variance and count (Welford-style parallel merge)."""
+
+    def __init__(self, shape=(), dtype=np.float32, epsilon=1e-4):
+        self.mean = np.zeros(shape, dtype=dtype)
+        self.var = np.ones(shape, dtype=dtype)
+        self.count = epsilon
+
+    def update(self, x: np.ndarray) -> None:
+        x = np.asarray(x, dtype=self.mean.dtype)
+        if x.ndim == 1:
+            x = x[None, :]
+        batch_mean = np.mean(x, axis=0)
+        batch_var = np.var(x, axis=0)
+        batch_count = x.shape[0]
+        self.mean, self.var, self.count = _update_mean_var_count_from_moments(
+            self.mean, self.var, self.count, batch_mean, batch_var, batch_count
+        )
+
+
+class ObservationNormalizer:
+    """
+    Online observation whitening matching SimbaV2 ObservationNormalizer:
+    - update running stats only during interaction (training=True)
+    - normalize replay batches at update time without updating stats
+    """
+
+    def __init__(self, obs_dim: int, epsilon: float = 1e-8):
+        self.obs_rms = RunningMeanStd(shape=(obs_dim,), dtype=np.float32)
+        self.epsilon = epsilon
+
+    def update(self, observations: np.ndarray) -> None:
+        self.obs_rms.update(observations)
+
+    def normalize(self, observations: np.ndarray) -> np.ndarray:
+        observations = np.asarray(observations, dtype=np.float32)
+        return (observations - self.obs_rms.mean) / np.sqrt(
+            self.obs_rms.var + self.epsilon
+        )
+
+    def normalize_batch(self, batch: Batch) -> Batch:
+        return Batch(
+            observations=self.normalize(batch.observations),
+            actions=batch.actions,
+            rewards=batch.rewards,
+            masks=batch.masks,
+            next_observations=self.normalize(batch.next_observations),
+            task_ids=batch.task_ids,
+        )
+
+
+def observation_normalizer_for_arch(arch: str, obs_dim: int) -> ObservationNormalizer | None:
+    if arch == "simbaV2":
+        return ObservationNormalizer(obs_dim=obs_dim)
+    return None
+
 
 class RewardNormalizer(object):
     def __init__(self, num_seeds: int, target_entropy: float, discount: float = 0.99, v_max: float = 10.0, max_steps: int | None = None):

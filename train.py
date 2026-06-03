@@ -102,7 +102,12 @@ def main(_):
             _log(f"[train] step {i}: training updates begin")
         elif i > FLAGS.start_training and i % FLAGS.log_interval == 0:
             _log(f"[train] step {i}/{FLAGS.max_steps}")
-        actions = env.action_space.sample() if i < FLAGS.start_training else agent.sample_actions(observations, temperature=1.0) # dlaczego tu jest temperature 1.0? TODO
+        if i < FLAGS.start_training:
+            actions = env.action_space.sample()
+        else:
+            actions = agent.sample_actions(
+                observations, temperature=1.0, training=True
+            )
         next_observations, rewards, terms, truns, goals = env.step(actions)
         reward_normalizer.update(rewards, terms, truns)
         statistics_recorder.update(rewards, goals, terms, truns)

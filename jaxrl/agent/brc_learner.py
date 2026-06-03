@@ -8,6 +8,7 @@ import optax
 
 from jaxrl.agent.networks.common import build_actor_critic, build_actor_input, Temperature
 from jaxrl.agent.update import update_actor, update_critic, update_target_critic, update_temperature
+from jaxrl.normalizer import observation_normalizer_for_arch
 from jaxrl.utils import Model, PRNGKey, Batch
 
 
@@ -143,8 +144,11 @@ class BRC(object):
     ) -> None:
         
         action_dim = actions.shape[-1]
+        obs_dim = int(observations.shape[-1])
         self.action_dim = float(action_dim)
+        self.arch = arch
         self.seed = seed
+        self.observation_normalizer = observation_normalizer_for_arch(arch, obs_dim)
         self.target_entropy = -self.action_dim / 2 if target_entropy is None else target_entropy
         self.tau = tau
         self.discount = discount
@@ -194,7 +198,28 @@ class BRC(object):
         self.actor, self.critic, self.target_critic, self.temp, self.rng = self.init_models(self.seed)
         self.step = 1
 
-    def sample_actions(self, observations: np.ndarray, temperature: float = 1.0):
+    def preprocess_observations(
+        self, observations: np.ndarray, *, training: bool = False
+    ) -> np.ndarray:
+        if self.observation_normalizer is None:
+            return observations
+        if training:
+            self.observation_normalizer.update(observations)
+        return self.observation_normalizer.normalize(observations)
+
+    def preprocess_batch(self, batch: Batch) -> Batch:
+        if self.observation_normalizer is None:
+            return batch
+        return self.observation_normalizer.normalize_batch(batch)
+
+    def sample_actions(
+        self,
+        observations: np.ndarray,
+        temperature: float = 1.0,
+        *,
+        training: bool = False,
+    ):
+        observations = self.preprocess_observations(observations, training=training)
         inputs = build_actor_input(self.critic, observations, self.task_ids, self.multitask)
         rng, actions = _sample_actions(self.rng, self.actor, inputs, temperature)
         self.rng = rng
@@ -202,6 +227,7 @@ class BRC(object):
         return np.clip(actions, -1, 1)
     
     def update(self, batch: Batch, num_updates: int, env_step: int):
+        batch = self.preprocess_batch(batch)
 
         step, rng, actor, critic, target_critic, temp, info = _do_multiple_updates(
             self.rng,
@@ -228,6 +254,7 @@ class BRC(object):
         return info
     
     def get_infos(self, batch: Batch):
+        batch = self.preprocess_batch(batch)
         infos = _get_infos(            
                     self.rng,
                     self.actor,

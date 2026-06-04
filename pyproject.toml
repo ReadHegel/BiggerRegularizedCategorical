@@ -16,5 +16,6 @@ dependencies = [
     "python-dotenv",
     "scipy==1.12.0",
     "shimmy",
+    "tqdm>=4.67.3",
     "wandb[media]",
 ]

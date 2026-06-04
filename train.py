@@ -12,6 +12,9 @@ from jaxrl.logger import EpisodeRecorder
 from jaxrl.env_names import get_environment_list
 from jaxrl.agent.networks import NETWORKS
 
+from tqdm import tqdm
+
+
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('seed', 0, 'Random seed.')
@@ -32,7 +35,7 @@ flags.DEFINE_integer('log_interval', 1000, 'Print progress every N env steps (us
 
 
 def _log(msg: str) -> None:
-    print(msg, flush=True)
+    tqdm.write(msg)
 
 def main(_):
     from dotenv import load_dotenv
@@ -54,7 +57,7 @@ def main(_):
             entity=os.getenv('WANDB_ENTITY'),
             project=os.getenv('WANDB_PROJECT'),
             group=f'{FLAGS.env_names}',
-            name=f'{FLAGS.seed}'
+            name=f'{FLAGS.env_names}_{FLAGS.arch}_seed{FLAGS.seed}'
         )
         
     env_names = get_environment_list(FLAGS.env_names)
@@ -95,13 +98,11 @@ def main(_):
     
     observations = env.reset()
 
-    for i in range(1, FLAGS.max_steps + 1):
+    for i in tqdm(range(1, FLAGS.max_steps + 1), desc="Train"):
         if i == 1:
             _log("[train] step 1 (random actions until start_training)")
         if i == FLAGS.start_training:
             _log(f"[train] step {i}: training updates begin")
-        elif i > FLAGS.start_training and i % FLAGS.log_interval == 0:
-            _log(f"[train] step {i}/{FLAGS.max_steps}")
         if i < FLAGS.start_training:
             actions = env.action_space.sample()
         else:

@@ -41,6 +41,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "scipy" },
     { name = "shimmy" },
+    { name = "tqdm" },
     { name = "wandb", extra = ["media"] },
 ]
 
@@ -57,6 +58,7 @@ requires-dist = [
     { name = "python-dotenv" },
     { name = "scipy", specifier = "==1.12.0" },
     { name = "shimmy" },
+    { name = "tqdm", specifier = ">=4.67.3" },
     { name = "wandb", extras = ["media"] },
 ]
 

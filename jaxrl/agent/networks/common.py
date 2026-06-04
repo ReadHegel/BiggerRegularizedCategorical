@@ -161,4 +161,16 @@ def build_actor_critic(
             **critic_overrides,
         )
         return actor, critic
+    elif arch == "flashsac":
+        from jaxrl.agent.networks.FlashSAC.flashsac_network import make_flashsac_actor, make_flashsac_critic
+        actor = make_flashsac_actor(action_dim, **actor_overrides)
+        critic = make_flashsac_critic(
+            num_tasks=num_tasks,
+            embedding_size=embedding_size,
+            ensemble_size=ensemble_size,
+            num_bins=num_bins,
+            multitask=multitask,
+            **critic_overrides,
+        )
+        return actor, critic
     raise ValueError(f"Unsupported architecture: {arch!r}")

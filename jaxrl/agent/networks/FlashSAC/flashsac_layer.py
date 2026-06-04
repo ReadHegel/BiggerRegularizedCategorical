@@ -15,7 +15,7 @@ class UnitLinear(nn.Module):
             name="unit_linear",
         )(x)
 
-# TODO It's stateless. Not as in the original paper.
+
 class UnitBatchNorm(nn.Module):
     momentum: float = 0.01
     eps: float = 1e-5
@@ -27,9 +27,24 @@ class UnitBatchNorm(nn.Module):
         weight = self.param("weight", nn.initializers.ones, (input_dim,))
         bias = self.param("bias", nn.initializers.zeros, (input_dim,))
 
-        # **Stateless** mean and variance across the batch dimension
-        mean = jnp.mean(x, axis=0, keepdims=True)
-        var = jnp.var(x, axis=0, keepdims=True)
+        running_mean = self.variable("batch_stats", "mean", lambda: jnp.zeros((input_dim,)))
+        running_var = self.variable("batch_stats", "var", lambda: jnp.ones((input_dim,)))
+
+        if training:
+            reduction_axes = tuple(range(x.ndim - 1))
+            mean = jnp.mean(x, axis=reduction_axes)
+            var = jnp.var(x, axis=reduction_axes)
+
+            running_mean.value = (
+                1.0 - self.momentum
+            ) * running_mean.value + self.momentum * mean
+            running_var.value = (
+                1.0 - self.momentum
+            ) * running_var.value + self.momentum * var
+        else:
+            mean = running_mean.value
+            var = running_var.value
+
         x_norm = (x - mean) / jnp.sqrt(var + self.eps)
         return x_norm * weight + bias
 
@@ -49,41 +64,27 @@ class UnitRMSNorm(nn.Module):
 class FlashSACEmbedder(nn.Module):
     input_dim: int
     hidden_dim: int
-    norm_type: str = "rms_norm" # TODO original paper uses UnitBatchNorm
 
     @nn.compact
     def __call__(self, x: jnp.ndarray, training: bool) -> jnp.ndarray:
-        if self.norm_type == "batch_norm":
-            x = UnitBatchNorm(name="unit_batch_norm")(x, training=training)
-            x = UnitLinear(output_dim=self.hidden_dim, name="w")(x)
-        elif self.norm_type == "rms_norm":
-            x = UnitRMSNorm(name="unit_rms_norm")(x)
-            x = UnitLinear(output_dim=self.hidden_dim, name="w")(x)
+        x = UnitBatchNorm(name="unit_batch_norm")(x, training=training)
+        x = UnitLinear(output_dim=self.hidden_dim, name="w")(x)
         return x
 
 
 class FlashSACBlock(nn.Module):
     hidden_dim: int
     expansion: int = 4
-    norm_type: str = "rms_norm" # TODO original paper uses UnitBatchNorm
 
     @nn.compact
     def __call__(self, x: jnp.ndarray, training: bool) -> jnp.ndarray:
         residual = x
-        if self.norm_type == "batch_norm":
-            x = UnitLinear(output_dim=self.hidden_dim * self.expansion, name="w1")(x)
-            x = UnitBatchNorm(name="unit_batch_norm1")(x, training=training)
-            x = nn.relu(x)
-            x = UnitLinear(output_dim=self.hidden_dim, name="w2")(x)
-            x = UnitBatchNorm(name="unit_batch_norm2")(x, training=training)
-            x = nn.relu(x)
-        elif self.norm_type == "rms_norm":
-            x = UnitLinear(output_dim=self.hidden_dim * self.expansion, name="w1")(x)
-            x = UnitRMSNorm(name="unit_rms_norm1")(x)
-            x = nn.relu(x)
-            x = UnitLinear(output_dim=self.hidden_dim, name="w2")(x)
-            x = UnitRMSNorm(name="unit_rms_norm2")(x)
-            x = nn.relu(x)
+        x = UnitLinear(output_dim=self.hidden_dim * self.expansion, name="w1")(x)
+        x = UnitBatchNorm(name="unit_batch_norm1")(x, training=training)
+        x = nn.relu(x)
+        x = UnitLinear(output_dim=self.hidden_dim, name="w2")(x)
+        x = UnitBatchNorm(name="unit_batch_norm2")(x, training=training)
+        x = nn.relu(x)
         return x + residual
 
 

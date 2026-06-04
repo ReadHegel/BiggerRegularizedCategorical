@@ -9,10 +9,23 @@ from jaxrl.agent.networks.common import build_actor_input
 from jaxrl.utils import Batch, Model, Params, PRNGKey, tree_norm
 
 def update_actor(key: PRNGKey, actor: Model, critic: Model, temp: Model, batch: Batch, num_bins: int, v_max: float, multitask: bool):
-    inputs = build_actor_input(critic, batch.observations, batch.task_ids, multitask)
+    is_stateful = (actor.batch_stats is not None)
+    if is_stateful:
+        inputs_curr = build_actor_input(critic, batch.observations, batch.task_ids, multitask)
+        inputs_next = build_actor_input(critic, batch.next_observations, batch.task_ids, multitask)
+        inputs_all = jnp.concatenate([inputs_curr, inputs_next], axis=0)
+    else:
+        inputs_all = build_actor_input(critic, batch.observations, batch.task_ids, multitask)
+
     def actor_loss_fn(actor_params: Params, batch_stats: Params = None):
-        dist, actor_state_updates = actor.apply(actor_params, batch_stats, inputs, mutable=["batch_stats"], training=True)        
-        actions, log_probs = dist.sample_and_log_prob(seed=key)
+        dist, actor_state_updates = actor.apply(actor_params, batch_stats, inputs_all, mutable=["batch_stats"], training=True)        
+        if is_stateful:
+            actions_all, log_probs_all = dist.sample_and_log_prob(seed=key)
+            actions = jnp.split(actions_all, 2, axis=0)[0]
+            log_probs = jnp.split(log_probs_all, 2, axis=0)[0]
+        else:
+            actions, log_probs = dist.sample_and_log_prob(seed=key)
+            
         q_logits, _ = critic(batch.observations, actions, batch.task_ids, mutable="batch_stats", training=False)        
         q_probs = jax.nn.softmax(q_logits, axis=-1).mean(axis=0)
         bin_values = jnp.linspace(start=-v_max, stop=v_max, num=num_bins)[None]
@@ -69,28 +82,58 @@ def update_critic(key: PRNGKey, actor: Model, critic: Model, target_critic: Mode
     inputs = build_actor_input(critic, batch.next_observations, batch.task_ids, multitask)
     dist = actor(inputs, training=False)
     next_actions, next_log_probs = dist.sample_and_log_prob(seed=key)
-    next_q_logits, _ = target_critic(
-        batch.next_observations,
-        next_actions,
-        batch.task_ids,
-        mutable="batch_stats",
-        training=True, # I am not sure if True is correct here, but it how it is done in the original code, also 
+    
+    is_stateful = (critic.batch_stats is not None)
+    if is_stateful:
+        obs_all = jnp.concatenate([batch.observations, batch.next_observations], axis=0)
+        act_all = jnp.concatenate([batch.actions, next_actions], axis=0)
+        task_ids_all = jnp.concatenate([batch.task_ids, batch.task_ids], axis=0) if batch.task_ids is not None else None
+        
+        target_q_logits_all, _ = target_critic(
+            obs_all,
+            act_all,
+            task_ids_all,
+            mutable="batch_stats",
+            training=True,
+        )
+        next_q_logits = jnp.split(target_q_logits_all, 2, axis=1)[1]
+    else:
+        obs_all = None
+        act_all = None
+        task_ids_all = None
+        next_q_logits, _ = target_critic(
+            batch.next_observations,
+            next_actions,
+            batch.task_ids,
+            mutable="batch_stats",
+            training=True, # I am not sure if True is correct here, but it how it is done in the original code, also 
                         # the running batch stats are not updated at all for target critic, so trainging=False would be wrong
-                    
-    )    
+        )    
 
     target_probs, q_value_target = categorical_td_loss(next_log_probs, next_q_logits, batch, discount, num_bins, v_max, temp)
 
     def critic_loss_fn(critic_params: Params, batch_stats: Params = None):
-        q_logits, critic_state_updates = critic.apply(
-            critic_params,
-            batch_stats,
-            batch.observations,
-            batch.actions,
-            batch.task_ids,
-            mutable="batch_stats",
-            training=True,
-        )
+        if is_stateful:
+            q_logits_all, critic_state_updates = critic.apply(
+                critic_params,
+                batch_stats,
+                obs_all,
+                act_all,
+                task_ids_all,
+                mutable="batch_stats",
+                training=True,
+            )
+            q_logits = jnp.split(q_logits_all, 2, axis=1)[0]
+        else:
+            q_logits, critic_state_updates = critic.apply(
+                critic_params,
+                batch_stats,
+                batch.observations,
+                batch.actions,
+                batch.task_ids,
+                mutable="batch_stats",
+                training=True,
+            )
         q_logprobs = jax.nn.log_softmax(q_logits, axis=-1)
         critic_loss = -(target_probs[None] * q_logprobs).sum(-1).mean(-1).sum(-1)
         return critic_loss, {

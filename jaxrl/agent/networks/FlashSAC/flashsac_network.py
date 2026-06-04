@@ -16,17 +16,15 @@ from jaxrl.agent.networks.FlashSAC.flashsac_layer import (
 from jaxrl.agent.networks.SimbaV2.utils import tree_map_until_match
 from jaxrl.utils import Model
 
-# Default configs from paper (using RMSNorm for stateless batch-size independent stability in JAX)
+# Default configs from the paper
 FLASH_ACTOR_CONFIG = {
     "num_blocks": 2,
     "hidden_dim": 128,
-    "norm_type": "rms_norm",
 }
 
 FLASH_CRITIC_CONFIG = {
     "num_blocks": 2,
     "hidden_dim": 256,
-    "norm_type": "rms_norm",
 }
 
 
@@ -112,7 +110,6 @@ class FlashSACActor(BaseActor):
     num_blocks: int
     hidden_dim: int
     action_dim: int
-    norm_type: str = "rms_norm"
     activations: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
 
     @nn.compact
@@ -126,7 +123,6 @@ class FlashSACActor(BaseActor):
         x = FlashSACEmbedder(
             input_dim=observations.shape[-1],
             hidden_dim=self.hidden_dim,
-            norm_type=self.norm_type,
             name="embedder",
         )(observations, training=training)
 
@@ -134,7 +130,6 @@ class FlashSACActor(BaseActor):
         for i in range(self.num_blocks):
             x = FlashSACBlock(
                 hidden_dim=self.hidden_dim,
-                norm_type=self.norm_type,
                 name=f"encoder_{i}",
             )(x, training=training)
 
@@ -157,7 +152,6 @@ class FlashSACQValue(nn.Module):
     num_blocks: int
     hidden_dim: int
     num_bins: int
-    norm_type: str = "rms_norm"
     activations: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
 
     @nn.compact
@@ -166,7 +160,6 @@ class FlashSACQValue(nn.Module):
         x = FlashSACEmbedder(
             input_dim=inputs.shape[-1],
             hidden_dim=self.hidden_dim,
-            norm_type=self.norm_type,
             name="embedder",
         )(inputs, training=training)
 
@@ -174,7 +167,6 @@ class FlashSACQValue(nn.Module):
         for i in range(self.num_blocks):
             x = FlashSACBlock(
                 hidden_dim=self.hidden_dim,
-                norm_type=self.norm_type,
                 name=f"encoder_{i}",
             )(x, training=training)
 
@@ -196,7 +188,6 @@ class FlashSACCritic(BaseEnsembleMultitaskCritic):
     num_blocks: int = 2
     hidden_dim: int = 256
     num_bins: int = 101
-    norm_type: str = "batch_norm"
     activations: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
 
     def q_member_kwargs(self) -> dict:
@@ -204,7 +195,6 @@ class FlashSACCritic(BaseEnsembleMultitaskCritic):
             "num_blocks": self.num_blocks,
             "hidden_dim": self.hidden_dim,
             "num_bins": self.num_bins,
-            "norm_type": self.norm_type,
             "activations": self.activations,
         }
 

@@ -16,7 +16,7 @@ BRO_ACTOR_CONFIG = {
     "log_std_max": 2.0,
 }
 BRO_CRITIC_CONFIG = {
-    "hidden_dims": 4096,
+    "hidden_dims": 1024,
     "depth": 2,
 }
 

@@ -24,7 +24,7 @@ FLASH_ACTOR_CONFIG = {
 
 FLASH_CRITIC_CONFIG = {
     "num_blocks": 2,
-    "hidden_dim": 256,
+    "hidden_dim": 512,
 }
 
 

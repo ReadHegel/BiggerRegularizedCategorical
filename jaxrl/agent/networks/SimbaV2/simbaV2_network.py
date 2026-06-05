@@ -25,7 +25,7 @@ SIMBA_ACTOR_CONFIG = {
 
 SIMBA_CRITIC_CONFIG = {
     "num_blocks": 4,
-    "hidden_dim": 512,
+    "hidden_dim": 352,
     "scaler_init": 1.0,
     "scaler_scale": 1.0,
     "alpha_init": 0.3,

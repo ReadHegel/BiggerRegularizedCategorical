@@ -15,7 +15,7 @@ from jaxrl.utils import Model
 
 SIMBA_ACTOR_CONFIG = {
     "num_blocks": 2,
-    "hidden_dim": 256,
+    "hidden_dim": 128,
     "scaler_init": 1.0,
     "scaler_scale": 1.0,
     "alpha_init": 0.3,
@@ -25,7 +25,7 @@ SIMBA_ACTOR_CONFIG = {
 
 SIMBA_CRITIC_CONFIG = {
     "num_blocks": 4,
-    "hidden_dim": 512,
+    "hidden_dim": 192,
     "scaler_init": 1.0,
     "scaler_scale": 1.0,
     "alpha_init": 0.3,

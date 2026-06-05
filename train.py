@@ -57,7 +57,7 @@ def main(_):
             entity=os.getenv('WANDB_ENTITY'),
             project=os.getenv('WANDB_PROJECT'),
             group=f'{FLAGS.env_names}',
-            name=f'{FLAGS.env_names}_{FLAGS.arch}_seed{FLAGS.seed}'
+            name=f'{FLAGS.env_names}_{FLAGS.arch}_2mln_seed{FLAGS.seed}'
         )
         
     env_names = get_environment_list(FLAGS.env_names)

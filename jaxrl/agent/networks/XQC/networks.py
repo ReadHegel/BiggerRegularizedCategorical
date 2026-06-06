@@ -33,7 +33,7 @@ XQC_ACTOR_CONFIG = {
     "skip_connections": False,
 }
 XQC_CRITIC_CONFIG = {
-    "hidden_dims": (512, 512, 512, 512),
+    "hidden_dims": (2240, 2240, 2240, 2240),
     "pre_activation_bn": True,
     "use_layer_norm": False,
     "use_batch_norm": True,

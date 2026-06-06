@@ -8,11 +8,11 @@ from jaxrl.utils import Batch
 
 class ParallelReplayBuffer:
     def __init__(self, observation_space: gym.spaces.Box, action_dim: int, capacity: int, num_tasks: int):
-        self.observations = np.empty((num_tasks, capacity, observation_space.shape[-1]), dtype=observation_space.dtype)
+        self.observations = np.empty((num_tasks, capacity, observation_space.shape[-1]), dtype=np.float32)
         self.actions = np.empty((num_tasks, capacity, action_dim), dtype=np.float32)
         self.rewards = np.empty((num_tasks, capacity, ), dtype=np.float32)
         self.masks = np.empty((num_tasks, capacity, ), dtype=np.float32)
-        self.next_observations = np.empty((num_tasks, capacity, observation_space.shape[-1]), dtype=observation_space.dtype)
+        self.next_observations = np.empty((num_tasks, capacity, observation_space.shape[-1]), dtype=np.float32)
         self.size = 0
         self.insert_index = 0
         self.capacity = capacity

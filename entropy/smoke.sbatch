@@ -3,6 +3,7 @@
 #SBATCH --job-name=smoke_brc
 #SBATCH --time=0-00:20:00
 #SBATCH --partition=a100
+#SBATCH --qos=aleksanderwojsz_a100
 #SBATCH --mem=10G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

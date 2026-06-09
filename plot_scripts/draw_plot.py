@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from jaxrl.env_names import get_environment_list
 
 RUN_NAME_RE = re.compile(
-    r"^(?P<env>.+)_(?P<arch>bro|simbaV2|xqc|flashsac)_(?P<size>\d+)mln_seed(?P<seed>\d+)$"
+    r"^(?P<env>.+)_(?P<arch>bro|simbaV2|xqc|flashsac)_(?P<size>\d+)(?:mln|m)_seed(?P<seed>\d+)$"
 )
 TASK_RETURN_COL_RE = re.compile(r"^seed(?P<task>\d+)/return$")
 MAX_RETURN = 1000.0
@@ -30,7 +30,7 @@ ARCH_STYLE = {
     "flashsac": {"marker": "o", "color": "#7f7f7f", "label": "flashsac"},
 }
 
-X_TICKS = [1, 4, 16, 64, 256]
+X_TICKS = [0.2, 0.5, 1, 4, 16, 32, 64]
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,6 +78,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def parse_param_count_m(size: str) -> float:
+    """Parse parameter count from run name size token (e.g. 05 -> 0.5M, 32 -> 32M)."""
+    if size.startswith("0") and len(size) > 1:
+        return int(size) / 10
+    return float(int(size))
+
+
 def parse_run_name(name: str) -> dict | None:
     match = RUN_NAME_RE.match(name)
     if not match:
@@ -85,7 +92,7 @@ def parse_run_name(name: str) -> dict | None:
     return {
         "env": match.group("env"),
         "arch": match.group("arch"),
-        "param_count_m": int(match.group("size")),
+        "param_count_m": parse_param_count_m(match.group("size")),
         "seed": int(match.group("seed")),
     }
 
@@ -192,9 +199,9 @@ def fetch_run_results(
 def aggregate_results(
     results: list[dict],
     task_idx: int | None = None,
-) -> dict[str, dict[int, dict[str, float]]]:
+) -> dict[str, dict[float, dict[str, float]]]:
     """Group by arch -> param_count_m -> {mean, std, n_seeds}."""
-    grouped: dict[tuple[str, int], list[float]] = defaultdict(list)
+    grouped: dict[tuple[str, float], list[float]] = defaultdict(list)
     for r in results:
         if task_idx is None:
             value = r["normalized_return"]
@@ -204,7 +211,7 @@ def aggregate_results(
                 continue
         grouped[(r["arch"], r["param_count_m"])].append(value)
 
-    aggregated: dict[str, dict[int, dict[str, float]]] = defaultdict(dict)
+    aggregated: dict[str, dict[float, dict[str, float]]] = defaultdict(dict)
     for (arch, param_count_m), values in grouped.items():
         arr = np.array(values)
         aggregated[arch][param_count_m] = {
@@ -217,7 +224,7 @@ def aggregate_results(
 
 def print_configuration_summary(results: list[dict]) -> None:
     """Print how many seeds are available per arch × parameter-count config."""
-    grouped: dict[tuple[str, int], list[int]] = defaultdict(list)
+    grouped: dict[tuple[str, float], list[int]] = defaultdict(list)
     for r in results:
         grouped[(r["arch"], r["param_count_m"])].append(r["seed"])
 
@@ -227,7 +234,7 @@ def print_configuration_summary(results: list[dict]) -> None:
         seed_list = ", ".join(f"seed{s}" for s in seeds)
         n = len(seeds)
         print(
-            f"  {arch:10} {param_count_m:4d}M: "
+            f"  {arch:10} {param_count_m:4g}M: "
             f"{n} seed{'s' if n != 1 else ''} ({seed_list})"
         )
 
@@ -240,15 +247,15 @@ def plot_output_path(base_output: str, suffix: str | None = None) -> str:
 
 
 def plot_scaling(
-    aggregated: dict[str, dict[int, dict[str, float]]],
+    aggregated: dict[str, dict[float, dict[str, float]]],
     output: str,
     title: str = "Multi-task model scaling",
     show: bool = False,
 ) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    ax.set_facecolor("#f0f0f0")
-    fig.patch.set_facecolor("#e8e8e8")
+    ax.set_facecolor("white")
+    fig.patch.set_facecolor("white")
 
     for arch, style in ARCH_STYLE.items():
         if arch not in aggregated:
@@ -287,15 +294,15 @@ def plot_scaling(
     ax.set_xticklabels([str(t) for t in X_TICKS])
     ax.set_xlim(min(X_TICKS), max(X_TICKS))
 
-    ax.set_ylim(0.0, 1.0)
-    ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+    ax.set_ylim(0.4, 1.0)
+    ax.set_yticks([0.4, 0.6, 0.8, 1.0])
 
     ax.set_xlabel("Total parameter count (M)", fontsize=12)
     ax.set_ylabel("Normalized returns", fontsize=12)
     ax.set_title(title, fontsize=14, fontweight="bold")
 
-    ax.grid(True, which="major", color="white", linewidth=1.2)
-    ax.grid(True, which="minor", color="white", linewidth=0.6, alpha=0.7)
+    ax.grid(True, which="major", color="#e0e0e0", linewidth=1.2)
+    ax.grid(True, which="minor", color="#e0e0e0", linewidth=0.6, alpha=0.7)
 
     for spine in ax.spines.values():
         spine.set_linewidth(2.0)
@@ -312,7 +319,7 @@ def plot_scaling(
 
     os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
     fig.tight_layout()
-    fig.savefig(output, dpi=150, facecolor=fig.get_facecolor())
+    fig.savefig(output, dpi=150, facecolor="white")
     print(f"Saved plot to {output}")
 
     if show:
@@ -357,7 +364,7 @@ def main() -> None:
         for size in sorted(aggregated_mean[arch]):
             stats = aggregated_mean[arch][size]
             print(
-                f"  {arch:10} {size:4d}M: "
+                f"  {arch:10} {size:4g}M: "
                 f"mean={stats['mean']:.3f} std={stats['std']:.3f} "
                 f"(n={stats['n_seeds']})"
             )
@@ -380,7 +387,7 @@ def main() -> None:
             for size in sorted(aggregated_task[arch]):
                 stats = aggregated_task[arch][size]
                 print(
-                    f"  {arch:10} {size:4d}M: "
+                    f"  {arch:10} {size:4g}M: "
                     f"mean={stats['mean']:.3f} std={stats['std']:.3f} "
                     f"(n={stats['n_seeds']})"
                 )

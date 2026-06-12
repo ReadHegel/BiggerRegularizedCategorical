@@ -251,6 +251,7 @@ def plot_scaling(
     output: str,
     title: str = "Multi-task model scaling",
     show: bool = False,
+    ylim: tuple[float, float] = (0.0, 1.0),
 ) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
 
@@ -294,8 +295,10 @@ def plot_scaling(
     ax.set_xticklabels([str(t) for t in X_TICKS])
     ax.set_xlim(min(X_TICKS), max(X_TICKS))
 
-    ax.set_ylim(0.4, 1.0)
-    ax.set_yticks([0.4, 0.6, 0.8, 1.0])
+    ax.set_ylim(*ylim)
+    y_min, y_max = ylim
+    n_ticks = 6 if y_min == 0.0 else 4
+    ax.set_yticks(np.linspace(y_min, y_max, n_ticks))
 
     ax.set_xlabel("Total parameter count (M)", fontsize=12)
     ax.set_ylabel("Normalized returns", fontsize=12)
@@ -374,6 +377,7 @@ def main() -> None:
         args.output,
         title="Multi-task model scaling (mean across tasks)",
         show=args.show,
+        ylim=(0.4, 1.0),
     )
 
     for task_idx, task_name in enumerate(task_names):

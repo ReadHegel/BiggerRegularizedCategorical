@@ -3,8 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import wandb
 from collections import defaultdict
+from dotenv import load_dotenv
 
-
+load_dotenv()
 api = wandb.Api()
 runs = api.runs("aleksanderwojsz-team/rl-project")
 
@@ -128,9 +129,10 @@ axes[0, 0].legend(loc="lower right", frameon=True, framealpha=0.9, edgecolor='no
 plt.tight_layout()
 plt.subplots_adjust(top=0.94)
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-png_path = os.path.join(script_dir, "step_vs_performance.png")
-pdf_path = os.path.join(script_dir, "step_vs_performance.pdf")
+# ./../plots/step_vs_performance
+plot_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "plots", "step_vs_performance")
+png_path = os.path.join(plot_dir, "step_vs_performance.png")
+pdf_path = os.path.join(plot_dir, "step_vs_performance.pdf")
 
 plt.savefig(png_path, dpi=300, bbox_inches='tight')
 plt.savefig(pdf_path, bbox_inches='tight')
@@ -188,8 +190,8 @@ axes1[0].legend(loc="lower right", frameon=True, framealpha=0.9, edgecolor='none
 fig1.tight_layout()
 fig1.subplots_adjust(top=0.82)
 
-fig1_png_path = os.path.join(script_dir, "figure1.png")
-fig1_pdf_path = os.path.join(script_dir, "figure1.pdf")
+fig1_png_path = os.path.join(plot_dir, "figure1.png")
+fig1_pdf_path = os.path.join(plot_dir, "figure1.pdf")
 
 fig1.savefig(fig1_png_path, dpi=300, bbox_inches='tight')
 fig1.savefig(fig1_pdf_path, bbox_inches='tight')
@@ -257,8 +259,8 @@ axes2[0, 0].legend(loc="best", frameon=True, framealpha=0.9, edgecolor='none')
 fig2.tight_layout()
 fig2.subplots_adjust(top=0.92)
 
-fig2_png_path = os.path.join(script_dir, "parameter_norms.png")
-fig2_pdf_path = os.path.join(script_dir, "parameter_norms.pdf")
+fig2_png_path = os.path.join(plot_dir, "parameter_norms.png")
+fig2_pdf_path = os.path.join(plot_dir, "parameter_norms.pdf")
 
 fig2.savefig(fig2_png_path, dpi=300, bbox_inches='tight')
 fig2.savefig(fig2_pdf_path, bbox_inches='tight')

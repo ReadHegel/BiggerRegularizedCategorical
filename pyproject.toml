@@ -10,6 +10,7 @@ dependencies = [
     "flax",
     "gymnasium==0.29.1",
     "imageio",
+    "matplotlib",
     "jax[cuda12-pip]==0.4.35",
     "ml-collections",
     "numpy==1.26.4",

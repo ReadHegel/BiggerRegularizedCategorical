@@ -1,7 +1,7 @@
 import os
 import sys
 
-ARCH = "bro"
+ARCH = "xqc"
 
 os.environ.setdefault("CUDA_ROOT", "/usr")
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
